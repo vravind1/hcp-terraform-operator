@@ -201,21 +201,104 @@ var _ = Describe("Helpers", Label("Unit"), func() {
 	})
 
 	Context("ParseTFEVersion", func() {
-		It("Valid TFE version", func() {
-			version := "v202502-1"
-			v, err := parseTFEVersion(version)
-			Expect(err).To(Succeed())
-			Expect(v).To(Equal(2025021))
+		Context("Legacy date-based versions", func() {
+			It("Valid legacy TFE version v202502-1", func() {
+				version := "v202502-1"
+				v, err := parseTFEVersion(version)
+				Expect(err).To(Succeed())
+				Expect(v).To(Equal(2025021))
+			})
+			It("Valid legacy TFE version v202409-1", func() {
+				version := "v202409-1"
+				v, err := parseTFEVersion(version)
+				Expect(err).To(Succeed())
+				Expect(v).To(Equal(2024091))
+			})
+			It("Invalid legacy TFE version without v prefix", func() {
+				version := "202502-1"
+				_, err := parseTFEVersion(version)
+				Expect(err).ToNot(Succeed())
+			})
+			It("Invalid legacy TFE version with wrong date format", func() {
+				version := "v20250-1"
+				_, err := parseTFEVersion(version)
+				Expect(err).ToNot(Succeed())
+			})
 		})
-		It("Invalid TFE version", func() {
-			version := "202502-1"
-			_, err := parseTFEVersion(version)
-			Expect(err).ToNot(Succeed())
+
+		Context("Semantic versions", func() {
+			It("Valid semantic version 1.0.0", func() {
+				version := "1.0.0"
+				v, err := parseTFEVersion(version)
+				Expect(err).To(Succeed())
+				Expect(v).To(Equal(301000000))
+				Expect(v).To(BeNumerically(">", 2024091)) // Should use new algorithm
+			})
+			It("Valid semantic version 1.1.2", func() {
+				version := "1.1.2"
+				v, err := parseTFEVersion(version)
+				Expect(err).To(Succeed())
+				Expect(v).To(Equal(301001002))
+				Expect(v).To(BeNumerically(">", 2024091)) // Should use new algorithm
+			})
+			It("Valid semantic version 2.0.0", func() {
+				version := "2.0.0"
+				v, err := parseTFEVersion(version)
+				Expect(err).To(Succeed())
+				Expect(v).To(Equal(302000000))
+				Expect(v).To(BeNumerically(">", 2024091)) // Should use new algorithm
+			})
+			It("Valid semantic version 10.12.5", func() {
+				version := "10.12.5"
+				v, err := parseTFEVersion(version)
+				Expect(err).To(Succeed())
+				Expect(v).To(Equal(310012005))
+				Expect(v).To(BeNumerically(">", 2024091)) // Should use new algorithm
+			})
+			It("Valid semantic version with pre-release 1.0.0-alpha", func() {
+				version := "1.0.0-alpha"
+				v, err := parseTFEVersion(version)
+				Expect(err).To(Succeed())
+				Expect(v).To(Equal(301000000))
+				Expect(v).To(BeNumerically(">", 2024091)) // Should use new algorithm
+			})
+			It("Valid semantic version with build metadata 2.1.3+build.1", func() {
+				version := "2.1.3+build.1"
+				v, err := parseTFEVersion(version)
+				Expect(err).To(Succeed())
+				Expect(v).To(Equal(302001003))
+				Expect(v).To(BeNumerically(">", 2024091)) // Should use new algorithm
+			})
+			It("Valid semantic version with pre-release and build 1.2.3-alpha+build", func() {
+				version := "1.2.3-alpha+build"
+				v, err := parseTFEVersion(version)
+				Expect(err).To(Succeed())
+				Expect(v).To(Equal(301002003))
+				Expect(v).To(BeNumerically(">", 2024091)) // Should use new algorithm
+			})
 		})
-		It("Empty TFE version", func() {
-			version := ""
-			_, err := parseTFEVersion(version)
-			Expect(err).ToNot(Succeed())
+
+		Context("Invalid versions", func() {
+			It("Empty TFE version", func() {
+				version := ""
+				_, err := parseTFEVersion(version)
+				Expect(err).ToNot(Succeed())
+			})
+			It("Invalid semantic version with only major.minor", func() {
+				version := "1.0"
+				_, err := parseTFEVersion(version)
+				Expect(err).ToNot(Succeed())
+			})
+			It("Invalid version string", func() {
+				version := "foo"
+				_, err := parseTFEVersion(version)
+				Expect(err).ToNot(Succeed())
+			})
+			It("Invalid semantic version with non-numeric components", func() {
+				version := "1.a.0"
+				_, err := parseTFEVersion(version)
+				Expect(err).ToNot(Succeed())
+			})
 		})
 	})
 })
