@@ -245,17 +245,22 @@ func (r *AgentPoolReconciler) reconcileAgentAutoscaling(ctx context.Context, ap 
 			return pendingWorkspaceRuns(ctx, ap)
 		}
 		tfeVersion := ap.tfClient.Client.RemoteTFEVersion()
-		version, err := parseTFEVersion(tfeVersion)
+		version, isSemantic, err := parseTFEVersionDetailed(tfeVersion)
 		if err != nil {
 			// If the TFE version parsing fails, do not return the error here and proceed further.
 			// In this case, a legacy algorithm will be taken.
 			ap.log.Error(err, "Reconcile Agent Autoscaling", "msg", "Failed to parse TFE version")
 			r.Recorder.Eventf(&ap.instance, corev1.EventTypeWarning, "AutoscaleAgentPool", "Failed to parse TFE version: %v", err.Error())
 		}
-		// In TFE version v202409-1, a new API endpoint was introduced.
-		// It now allows retrieving a list of runs for the organization.
-		if version >= 2024091 {
-			ap.log.Info("Reconcile Agent Autoscaling", "msg", fmt.Sprintf("Proceeding with the new algorithm based on the detected TFE version %s", tfeVersion))
+		// Use new algorithm for:
+		// 1. Any semantic version (e.g., 1.0.0, 2.1.3-alpha)
+		// 2. Legacy versions >= v202409-1 (when new API endpoint was introduced)
+		if isSemantic || version >= legacyVersionThreshold {
+			if isSemantic {
+				ap.log.Info("Reconcile Agent Autoscaling", "msg", fmt.Sprintf("Proceeding with the new algorithm for semantic TFE version %s", tfeVersion))
+			} else {
+				ap.log.Info("Reconcile Agent Autoscaling", "msg", fmt.Sprintf("Proceeding with the new algorithm based on the detected TFE version %s", tfeVersion))
+			}
 			return pendingWorkspaceRuns(ctx, ap)
 		}
 		ap.log.Info("Reconcile Agent Autoscaling", "msg", fmt.Sprintf("Proceeding with the legacy algorithm based to the detected TFE version %s", tfeVersion))

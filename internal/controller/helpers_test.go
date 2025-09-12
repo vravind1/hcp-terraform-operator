@@ -217,5 +217,105 @@ var _ = Describe("Helpers", Label("Unit"), func() {
 			_, err := parseTFEVersion(version)
 			Expect(err).ToNot(Succeed())
 		})
+		It("Semantic version compatibility", func() {
+			version := "1.0.0"
+			v, err := parseTFEVersion(version)
+			Expect(err).To(Succeed())
+			Expect(v).To(Equal(301000000)) // semanticVersionBase + 1*1_000_000 + 0*1_000 + 0
+		})
+	})
+
+	Context("ParseTFEVersionDetailed", func() {
+		Context("Legacy format", func() {
+			DescribeTable("Valid legacy versions",
+				func(version string, expectedNum int) {
+					versionNum, isSemantic, err := parseTFEVersionDetailed(version)
+					Expect(err).To(Succeed())
+					Expect(isSemantic).To(BeFalse())
+					Expect(versionNum).To(Equal(expectedNum))
+				},
+				Entry("Future version", "v202502-1", 2025021),
+				Entry("Boundary version", "v202409-1", 2024091),
+				Entry("Before threshold", "v202408-1", 2024081),
+				Entry("Old version", "v202012-5", 2020125),
+			)
+
+			DescribeTable("Invalid legacy versions",
+				func(version string) {
+					_, _, err := parseTFEVersionDetailed(version)
+					Expect(err).To(HaveOccurred())
+				},
+				Entry("Missing v prefix", "202502-1"),
+				Entry("Invalid date format", "v20250-1"),
+				Entry("Two-digit suffix", "v202409-10"),
+			)
+		})
+
+		Context("Semantic format", func() {
+			DescribeTable("Valid semantic versions",
+				func(version string, expectedMajor, expectedMinor, expectedPatch int) {
+					versionNum, isSemantic, err := parseTFEVersionDetailed(version)
+					Expect(err).To(Succeed())
+					Expect(isSemantic).To(BeTrue())
+					
+					// Verify encoding
+					expectedEncoded := 300000000 + expectedMajor*1_000_000 + expectedMinor*1_000 + expectedPatch
+					Expect(versionNum).To(Equal(expectedEncoded))
+					
+					// Verify it's above semantic threshold
+					Expect(versionNum).To(BeNumerically(">=", 300000000))
+				},
+				Entry("Simple version", "1.0.0", 1, 0, 0),
+				Entry("Minor version", "1.1.0", 1, 1, 0),
+				Entry("Patch version", "2.0.3", 2, 0, 3),
+				Entry("Large numbers", "10.12.5", 10, 12, 5),
+				Entry("With prerelease", "1.0.0-alpha", 1, 0, 0),
+				Entry("Complex prerelease", "2.1.3-beta.1", 2, 1, 3),
+				Entry("With build metadata", "1.0.0+build.123", 1, 0, 0),
+				Entry("Prerelease and build", "1.2.3-alpha+build", 1, 2, 3),
+			)
+
+			DescribeTable("Invalid semantic versions",
+				func(version string) {
+					_, _, err := parseTFEVersionDetailed(version)
+					Expect(err).To(HaveOccurred())
+				},
+				Entry("Incomplete version", "1.0"),
+				Entry("Too many parts", "1.0.0.1"),
+				Entry("Non-numeric major", "a.0.0"),
+				Entry("Non-numeric minor", "1.b.0"),
+				Entry("Non-numeric patch", "1.0.c"),
+			)
+		})
+
+		Context("Malformed versions", func() {
+			DescribeTable("Invalid versions",
+				func(version string) {
+					_, _, err := parseTFEVersionDetailed(version)
+					Expect(err).To(HaveOccurred())
+				},
+				Entry("Empty string", ""),
+				Entry("Random text", "foo"),
+				Entry("Just numbers", "123456"),
+			)
+		})
+
+		Context("Algorithm selection logic", func() {
+			DescribeTable("New algorithm selection",
+				func(version string, shouldUseNewAlgorithm bool) {
+					versionNum, isSemantic, err := parseTFEVersionDetailed(version)
+					Expect(err).To(Succeed())
+					
+					// Logic: isSemantic || versionNum >= legacyVersionThreshold
+					usesNewAlgorithm := isSemantic || versionNum >= 2024091
+					Expect(usesNewAlgorithm).To(Equal(shouldUseNewAlgorithm))
+				},
+				Entry("Semantic version always uses new", "1.0.0", true),
+				Entry("Legacy at threshold uses new", "v202409-1", true),
+				Entry("Legacy above threshold uses new", "v202502-1", true),
+				Entry("Legacy below threshold uses old", "v202408-1", false),
+				Entry("Old legacy version uses old", "v202012-5", false),
+			)
+		})
 	})
 })

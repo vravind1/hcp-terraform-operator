@@ -20,6 +20,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+const (
+	legacyVersionThreshold = 2024091  // existing threshold for legacy versions >= v202409-1
+	semanticVersionBase    = 300000000 // any semantic encoded value starts at or above this
+)
+
 func doNotRequeue() (reconcile.Result, error) {
 	return reconcile.Result{}, nil
 }
@@ -100,12 +105,61 @@ func secretKeyRef(ctx context.Context, c client.Client, nn types.NamespacedName,
 	return "", fmt.Errorf("unable to find key=%q in secret=%q namespace=%q", key, nn.Name, nn.Namespace)
 }
 
-func parseTFEVersion(version string) (int, error) {
-	versionRegexp := regexp.MustCompile(`^v([0-9]{6})-([0-9]{1})$`)
-	matches := versionRegexp.FindStringSubmatch(version)
+// parseTFEVersionDetailed parses TFE version strings in both legacy (vYYYYMM-N) and 
+// semantic (MAJOR.MINOR.PATCH[...]) formats.
+//
+// For legacy versions (e.g., v202409-1), it returns the composed numeric value (2024091) 
+// and isSemantic=false.
+//
+// For semantic versions (e.g., 1.2.3), it encodes them as:
+// semanticVersionBase + major*1_000_000 + minor*1_000 + patch
+// and returns isSemantic=true.
+//
+// This encoding ensures semantic versions are always >= semanticVersionBase (300000000),
+// making them easily distinguishable from legacy versions.
+func parseTFEVersionDetailed(version string) (int, bool, error) {
+	// Try legacy format first: ^v(\d{6})-(\d)$
+	legacyRegexp := regexp.MustCompile(`^v([0-9]{6})-([0-9]{1})$`)
+	matches := legacyRegexp.FindStringSubmatch(version)
 	if len(matches) == 3 {
-		return strconv.Atoi(matches[1] + matches[2])
+		versionNum, err := strconv.Atoi(matches[1] + matches[2])
+		if err != nil {
+			return 0, false, fmt.Errorf("failed to parse legacy TFE version %s: %v", version, err)
+		}
+		return versionNum, false, nil
 	}
 
-	return 0, fmt.Errorf("malformed TFE version %s", version)
+	// Try semantic format: ^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$
+	semanticRegexp := regexp.MustCompile(`^([0-9]+)\.([0-9]+)\.([0-9]+)(?:[-+].*)?$`)
+	matches = semanticRegexp.FindStringSubmatch(version)
+	if len(matches) >= 4 {
+		major, err := strconv.Atoi(matches[1])
+		if err != nil {
+			return 0, false, fmt.Errorf("failed to parse major version from %s: %v", version, err)
+		}
+		minor, err := strconv.Atoi(matches[2])
+		if err != nil {
+			return 0, false, fmt.Errorf("failed to parse minor version from %s: %v", version, err)
+		}
+		patch, err := strconv.Atoi(matches[3])
+		if err != nil {
+			return 0, false, fmt.Errorf("failed to parse patch version from %s: %v", version, err)
+		}
+
+		// Encode semantic version: semanticVersionBase + major*1_000_000 + minor*1_000 + patch
+		encoded := semanticVersionBase + major*1_000_000 + minor*1_000 + patch
+		return encoded, true, nil
+	}
+
+	return 0, false, fmt.Errorf("malformed TFE version %s", version)
+}
+
+// parseTFEVersion parses TFE version strings and returns the numeric representation.
+// This function maintains backward compatibility for existing callers.
+// 
+// Deprecated: New code should use parseTFEVersionDetailed to distinguish between
+// legacy and semantic version formats.
+func parseTFEVersion(version string) (int, error) {
+	versionNum, _, err := parseTFEVersionDetailed(version)
+	return versionNum, err
 }
