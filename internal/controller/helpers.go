@@ -100,11 +100,42 @@ func secretKeyRef(ctx context.Context, c client.Client, nn types.NamespacedName,
 	return "", fmt.Errorf("unable to find key=%q in secret=%q namespace=%q", key, nn.Name, nn.Namespace)
 }
 
+const (
+	// SEMVER_BASE is the base value for semantic version encoding.
+	// All semantic versions will be encoded as values >= SEMVER_BASE to ensure
+	// they are always greater than legacy version values and trigger the new algorithm.
+	SEMVER_BASE = 300000000
+)
+
+// parseTFEVersion parses TFE version strings supporting both legacy date-based
+// versions (e.g., v202409-1) and semantic versions (e.g., 1.0.0, 1.1.2).
+//
+// Legacy versions are parsed as YYYYMM + revision digit (e.g., v202409-1 -> 2024091).
+// Semantic versions are encoded as SEMVER_BASE + major*1000000 + minor*1000 + patch
+// to ensure they are always greater than any legacy version and use the new algorithm.
 func parseTFEVersion(version string) (int, error) {
-	versionRegexp := regexp.MustCompile(`^v([0-9]{6})-([0-9]{1})$`)
-	matches := versionRegexp.FindStringSubmatch(version)
+	// First try to match legacy pattern ^v(\d{6})-(\d)$
+	legacyRegexp := regexp.MustCompile(`^v([0-9]{6})-([0-9]{1})$`)
+	matches := legacyRegexp.FindStringSubmatch(version)
 	if len(matches) == 3 {
 		return strconv.Atoi(matches[1] + matches[2])
+	}
+
+	// Try to parse as semantic version: major.minor.patch with optional pre-release/build metadata
+	semverRegexp := regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$`)
+	matches = semverRegexp.FindStringSubmatch(version)
+	if len(matches) >= 4 {
+		major, err1 := strconv.Atoi(matches[1])
+		minor, err2 := strconv.Atoi(matches[2])
+		patch, err3 := strconv.Atoi(matches[3])
+
+		if err1 != nil || err2 != nil || err3 != nil {
+			return 0, fmt.Errorf("malformed TFE version %s", version)
+		}
+
+		// Encode semantic version to ensure it's always > legacy threshold
+		encoded := SEMVER_BASE + major*1000000 + minor*1000 + patch
+		return encoded, nil
 	}
 
 	return 0, fmt.Errorf("malformed TFE version %s", version)

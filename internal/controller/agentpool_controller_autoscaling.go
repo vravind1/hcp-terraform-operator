@@ -252,8 +252,10 @@ func (r *AgentPoolReconciler) reconcileAgentAutoscaling(ctx context.Context, ap 
 			ap.log.Error(err, "Reconcile Agent Autoscaling", "msg", "Failed to parse TFE version")
 			r.Recorder.Eventf(&ap.instance, corev1.EventTypeWarning, "AutoscaleAgentPool", "Failed to parse TFE version: %v", err.Error())
 		}
-		// In TFE version v202409-1, a new API endpoint was introduced.
-		// It now allows retrieving a list of runs for the organization.
+		// All semantic TFE versions (>= 1.0.0) and legacy versions >= v202409-1 use the new algorithm.
+		// In TFE version v202409-1, a new API endpoint was introduced that allows retrieving
+		// a list of runs for the organization. Semantic versions are encoded with a large base
+		// value to ensure they always trigger the new algorithm.
 		if version >= 2024091 {
 			ap.log.Info("Reconcile Agent Autoscaling", "msg", fmt.Sprintf("Proceeding with the new algorithm based on the detected TFE version %s", tfeVersion))
 			return pendingWorkspaceRuns(ctx, ap)
