@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	legacyVersionThreshold = 2024091  // existing threshold for legacy versions >= v202409-1
+	legacyVersionThreshold = 2024091   // existing threshold for legacy versions >= v202409-1
 	semanticVersionBase    = 300000000 // any semantic encoded value starts at or above this
 )
 
@@ -105,10 +105,10 @@ func secretKeyRef(ctx context.Context, c client.Client, nn types.NamespacedName,
 	return "", fmt.Errorf("unable to find key=%q in secret=%q namespace=%q", key, nn.Name, nn.Namespace)
 }
 
-// parseTFEVersionDetailed parses TFE version strings in both legacy (vYYYYMM-N) and 
+// parseTFEVersionDetailed parses TFE version strings in both legacy (vYYYYMM-N) and
 // semantic (MAJOR.MINOR.PATCH[...]) formats.
 //
-// For legacy versions (e.g., v202409-1), it returns the composed numeric value (2024091) 
+// For legacy versions (e.g., v202409-1), it returns the composed numeric value (2024091)
 // and isSemantic=false.
 //
 // For semantic versions (e.g., 1.2.3), it encodes them as:
@@ -156,7 +156,7 @@ func parseTFEVersionDetailed(version string) (int, bool, error) {
 
 // parseTFEVersion parses TFE version strings and returns the numeric representation.
 // This function maintains backward compatibility for existing callers.
-// 
+//
 // Deprecated: New code should use parseTFEVersionDetailed to distinguish between
 // legacy and semantic version formats.
 func parseTFEVersion(version string) (int, error) {

@@ -257,11 +257,11 @@ var _ = Describe("Helpers", Label("Unit"), func() {
 					versionNum, isSemantic, err := parseTFEVersionDetailed(version)
 					Expect(err).To(Succeed())
 					Expect(isSemantic).To(BeTrue())
-					
+
 					// Verify encoding
 					expectedEncoded := 300000000 + expectedMajor*1_000_000 + expectedMinor*1_000 + expectedPatch
 					Expect(versionNum).To(Equal(expectedEncoded))
-					
+
 					// Verify it's above semantic threshold
 					Expect(versionNum).To(BeNumerically(">=", 300000000))
 				},
@@ -305,7 +305,7 @@ var _ = Describe("Helpers", Label("Unit"), func() {
 				func(version string, shouldUseNewAlgorithm bool) {
 					versionNum, isSemantic, err := parseTFEVersionDetailed(version)
 					Expect(err).To(Succeed())
-					
+
 					// Logic: isSemantic || versionNum >= legacyVersionThreshold
 					usesNewAlgorithm := isSemantic || versionNum >= 2024091
 					Expect(usesNewAlgorithm).To(Equal(shouldUseNewAlgorithm))

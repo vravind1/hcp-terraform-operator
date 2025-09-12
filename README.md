@@ -126,6 +126,36 @@ If you encounter any issues with the Operator there are a number of ways how to 
 
 If you believe you've found a bug and cannot find an existing issue, feel free to open a new issue! Be sure to include as much information as you can about your environment.
 
+## Terraform Enterprise Version Detection
+
+For contributors working on the operator, it's important to understand how the operator detects and handles different Terraform Enterprise (TFE) versions to enable appropriate features and algorithms.
+
+The operator supports two version formats:
+
+### Legacy Format (vYYYYMM-N)
+- Format: `v` + 6-digit year/month + `-` + single digit
+- Examples: `v202409-1`, `v202502-1`
+- Encoding: Direct concatenation of digits (e.g., `v202409-1` → `2024091`)
+
+### Semantic Versioning (MAJOR.MINOR.PATCH)
+- Format: Standard semantic versioning with optional prerelease and build metadata
+- Examples: `1.0.0`, `2.1.3-alpha`, `1.0.0+build.123`
+- Encoding: `300000000 + major*1,000,000 + minor*1,000 + patch`
+- This encoding ensures semantic versions are always ≥ 300,000,000, making them easily distinguishable from legacy versions
+
+### Algorithm Selection Logic
+The operator automatically selects the appropriate algorithm for agent autoscaling based on version detection:
+
+- **New Algorithm**: Used for all semantic versions OR legacy versions ≥ `v202409-1`
+- **Legacy Algorithm**: Used for legacy versions < `v202409-1`
+
+### Implementation Details
+- `parseTFEVersionDetailed(version string) (int, bool, error)`: Returns numeric value, semantic flag, and error
+- `parseTFEVersion(version string) (int, error)`: Backward-compatible wrapper for existing code
+- Constants: `legacyVersionThreshold = 2024091`, `semanticVersionBase = 300000000`
+
+This dual-format support ensures backward compatibility while enabling new features for modern TFE deployments.
+
 ## Contributing to the Operator
 
 We appreciate your enthusiasm for participating in the development of the HCP Terraform Operator. To contribute, please read the [contribution guidelines](./CONTRIBUTING.md).
